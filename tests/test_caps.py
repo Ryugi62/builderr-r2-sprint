@@ -14,7 +14,7 @@ def _projected(orders, bars):
 def test_attack_book_weights_and_beta(agent, bull_market):
     vals = _projected(agent.decide(bull_market, PS0, 1e5), bull_market)
     assert max(v / 1e5 for v in vals.values()) <= 0.25 + 1e-9
-    assert sum(v * beta(t) for t, v in vals.items()) / 1e5 <= 1.30 + 1e-6
+    assert sum(v * beta(t) for t, v in vals.items()) / 1e5 <= 1.25 + 1e-6
     assert sum(vals.values()) <= 1e5
     assert "SOXL" in vals  # semis lead in this fixture -> 3x semis sleeve
 
@@ -78,12 +78,30 @@ def load_fresh():
     return load_agent().decide
 
 
-def test_gross_drift_above_140_resets_sleeve(agent, bull_market):
+def test_gross_drift_above_135_resets_sleeve(agent, bull_market):
     closes = {t: r[-1]["close"] for t, r in bull_market.items()}
     eq = 100000.0
-    # leaders at 25% each + SOXL drifted to 22% -> beta gross 0.75 + 0.66 = 1.41 > 1.40
+    # leaders at 25% each + SOXL drifted to 22% -> beta gross 0.75 + 0.66 = 1.41 > 1.35
     pos = [{"ticker": t, "quantity": 25000 / closes[t], "avg_cost": 1} for t in ("NVDA", "MU", "AMD")]
     pos.append({"ticker": "SOXL", "quantity": 22000 / closes["SOXL"], "avg_cost": 1})
     ps = {"cash": eq - 75000 - 22000, "positions": pos, "last_prices": {}}
     orders = agent.decide(bull_market, ps, ps["cash"])
     assert [o for o in orders if o["ticker"] == "SOXL" and o["side"] == "sell"]
+
+
+def test_held_name_without_price_is_still_sold_when_not_targeted(agent, bull_market):
+    ps = {"cash": 1000.0, "positions": [{"ticker": "DELISTED", "quantity": 10.0, "avg_cost": 5.0}], "last_prices": {}}
+    orders = agent.decide(bull_market, ps, 1000.0)
+    assert {"ticker": "DELISTED", "side": "sell", "quantity": 10.0} in orders
+
+
+def test_sleeve_gap_up_40pct_stays_under_cap_at_close(agent, bull_market):
+    """Stress: the 3x sleeve gaps up 40% overnight while leaders are flat (admission checks closes)."""
+    from conftest import load_agent
+    bars = {t: [dict(b) for b in rows] for t, rows in bull_market.items()}
+    for b in bars["SOXL"][110:]:
+        for k in ("open", "high", "low", "close"):
+            b[k] *= 1.40
+    m = Market(bars)
+    r = run_admission(load_agent().decide, m, m.dates[100], m.dates[-1])
+    assert r["passed"] and r["peak_gross"] < 1.45, r

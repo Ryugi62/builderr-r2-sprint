@@ -1,5 +1,8 @@
 """Backtests for the README and the success conditions in SPEC.md (S1, S3, S6, S7).
 
+Return = account value at the last session's close / $100,000 - 1, counted from the first scored
+session (the board's definition).
+
 python research/backtest.py            # needs data/bars5y.json (research/fetch_bars.py)
 Writes results/backtest.json and prints a summary. All runs use engine/sim.py, whose QQQ
 buy-and-hold matches the official Round 2 market curve to within 0.07% (see results).
@@ -74,8 +77,15 @@ def main():
         for x in w["maxw"]:
             st = st + 1 if x >= 0.30 else 0
             streak_fail += st >= 2
+    adm_all = run_admission(fresh(), m, "2022-03-01", "2026-10-09", history=80)
     res["S3_caps_replay"] = {"max_close_beta_gross": max(w["max_gross"] for w in ours),
-                             "windows_with_30pct_two_closes": streak_fail}
+                             "windows_with_30pct_two_closes": streak_fail,
+                             "admission_engine_continuous_2022_2026": {k: adm_all[k] for k in
+                                 ("peak_gross", "peak_conc", "max_conc_streak", "mdd", "errors", "passed", "days")}}
+    import hashlib
+    res["data_snapshot"] = {"file": "data/bars5y.json (not committed; research/fetch_bars.py)",
+                            "sha256": hashlib.sha256((ROOT / "data" / "bars5y.json").read_bytes()).hexdigest(),
+                            "fetched": "2026-10-12 (Yahoo chart API, adjusted)", "last_bar": max(m.dates)}
     # Independence caveat: non-overlapping 15-session blocks, and per calendar year
     blocks = [w["ret"] for w in ours[::WINDOW]]
     p6 = sum(r >= 0.06 for r in blocks) / len(blocks)
@@ -88,6 +98,48 @@ def main():
     hs = SINGLES_FOR_CHECK
     rr = rolling(m, lambda: fresh(SINGLES=hs), "2022-03-01", "2026-10-09")
     res["S6_without_PLTR_MU_MRVL_AVGO"] = stats([w["ret"] for w in rr])
+    # Moving bar: model each current top-3 entrant's next 15 sessions as beta x QQQ over the same
+    # window (beta fitted on their official Round 2 daily curve), and count windows where this agent
+    # ends above that moved bar.
+    off0 = json.load(open(OFFICIAL))
+    mk = json.load(open(HISTORY))["market"]["curve"]
+    qret = [mk[i] / mk[i - 1] - 1 for i in range(1, len(mk))]
+    bars_mv = {}
+    for name in ("opu", "vishwas", "sham"):
+        c = off0[name]["curve"]
+        n = len(c)
+        rr_ = [c[i] / c[i - 1] - 1 for i in range(len(c) - n + 1, n)]
+        q_ = qret[-len(rr_):]
+        mq = sum(q_) / len(q_); mr = sum(rr_) / len(rr_)
+        b = sum((a - mq) * (r - mr) for a, r in zip(q_, rr_)) / sum((a - mq) ** 2 for a in q_)
+        bars_mv[name] = {"now": off0[name]["ret"], "beta": b}
+    qq = {w["start"]: w["ret"] for w in qqq}
+    first, third = bars_mv["opu"], bars_mv["sham"]
+    beat1 = [w["ret"] > (1 + first["now"]) * (1 + first["beta"] * qq[w["start"]]) - 1 for w in ours]
+    beat3 = [w["ret"] > (1 + third["now"]) * (1 + third["beta"] * qq[w["start"]]) - 1 for w in ours]
+    res["moving_bar"] = {"entrants": bars_mv, "p_above_current_1st_moved": sum(beat1) / len(beat1),
+                         "p_above_current_3rd_moved": sum(beat3) / len(beat3),
+                         "note": "ignores other entrants and late entrants; a bar model, not a forecast"}
+    # Continuous replay 2022-03 .. 2026-10 (one account), and a data sanity check
+    cont = run_live(fresh(), m, "2022-03-01", "2026-10-09", history=80)
+    dr = [cont["curve"][i] / cont["curve"][i - 1] - 1 for i in range(1, len(cont["curve"]))]
+    yrs = len(cont["curve"]) / 252
+    res["continuous_2022_2026"] = {"sessions": len(cont["curve"]), "total_ret": cont["ret"],
+                                   "cagr": (1 + cont["ret"]) ** (1 / yrs) - 1, "max_drawdown": max_drawdown(cont["curve"]),
+                                   "worst_day": min(dr), "best_day": max(dr)}
+    jumps = []
+    for t, rows in bars.items():
+        for a, b in zip(rows, rows[1:]):
+            r = b["close"] / a["close"] - 1
+            if abs(r) > (0.45 if t in ("SOXL", "TQQQ", "UPRO", "SPXL") else 0.30):
+                jumps.append([t, b["ts"], round(r, 4)])
+    res["data_check_large_daily_moves"] = jumps
+    hm = json.load(open(HISTORY))
+    qb = {r["ts"]: r for r in bars["QQQ"]}
+    o = qb[hm["dates"][0]]["open"] * 1.0005
+    res["mirror_check_qqq_vs_official_market_curve_max_rel_err"] = max(
+        abs(100000 / o * qb[d]["close"] - v) / v for d, v in zip(hm["dates"], hm["market"]["curve"]))
+    res["qqq_official_round2_ret"] = hm["market"]["curve"][-1] / 100000 - 1
     # last-2-years subset (2024-10 .. 2026-10)
     recent = [w["ret"] for w in ours if w["start"] >= "2024-10-01"]
     res["S6_rolling_15_last_2y"] = stats(recent)
@@ -120,7 +172,7 @@ def main():
                             "qqq_buy_hold": run_live(buy_hold("QQQ"), m, ds[0], ds[-1], enforce_limits=False)["ret"]}
     # S1 — admission mirror: 3 public windows + 2 stress windows
     import gzip
-    raw = json.loads(gzip.open(ROOT / "data" / "sample_regimes.json.gz", "rb").read())
+    raw = json.loads(gzip.open(ROOT / "sample_regimes.json.gz", "rb").read())
     adm = {}
     for k, v in raw.items():
         bb = {t: [{"ts": r[0], "open": r[1], "high": r[2], "low": r[3], "close": r[4], "volume": r[5]} for r in rows]

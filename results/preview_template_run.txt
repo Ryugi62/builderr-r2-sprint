@@ -1,0 +1,19 @@
+=== builderr local admission preview: agent.py ===
+Running your bot across 3 real, public sample windows...
+
+  window                   Ret   MaxDD  Sharpe  Calmar  Trades
+  calm_uptrend          14.86%   6.74%    3.05   10.77      45
+  moderate_selloff      -7.03%   7.69%   -5.14   -5.81      26
+  vol_spike_snapback    -9.45%  12.66%   -2.37   -3.11      14
+
+Safety bar (exactly what admission gates on):
+  [PASS] runs clean, no errors
+  [PASS] no leverage breach   (peak gross 1.32x  <= 1.5x)
+  [PASS] no concentration breach (peak 28%; longest run >= 30% was 0d, limit is 5d)
+  [PASS] no blow-up           (worst drawdown 12.7%  < 50%)
+
+VERDICT: ✓ You clear admission's safety bar — you're very likely to be ADMITTED.
+         Push your repo + email submit@builderr.ai to lock in your official run.
+
+(Numbers above are on SAMPLE public windows — illustrative, NOT your official score.
+ Real admission runs centrally on hidden regimes; the 60-day live test is what ranks you.)

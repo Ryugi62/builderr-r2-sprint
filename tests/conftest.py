@@ -32,7 +32,7 @@ def _expand(rows):
 
 @pytest.fixture(scope="session")
 def regimes():
-    raw = json.loads(gzip.open(ROOT / "data" / "sample_regimes.json.gz", "rb").read())
+    raw = json.loads(gzip.open(ROOT / "sample_regimes.json.gz", "rb").read())
     return {k: {"bars": {t: _expand(r) for t, r in v["bars"].items()},
                 "eval_start": v["eval_start"], "eval_end": v["eval_end"]} for k, v in raw.items()}
 

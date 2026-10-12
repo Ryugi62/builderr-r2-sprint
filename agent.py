@@ -3,7 +3,7 @@
 When is it aggressive?  QQQ is above its 20- and 50-session averages, its 10-session realized
 volatility is <= 40% a year, and it has not fallen 6% in 5 sessions recently. Then it holds the
 3 strongest uptrending stocks at 25% each plus one 3x ETF sleeve (SOXL when semis lead, else
-TQQQ) sized so beta-adjusted gross is 1.30.
+TQQQ) sized so beta-adjusted gross is 1.25.
 
 What forces it to stop?  (1) QQQ closes under its 20-session average or volatility passes 40%:
 the 3x sleeve is sold, leaders stay. (2) QQQ closes under its 50-session average, or a -6%
@@ -22,9 +22,9 @@ LEADER_WEIGHT = 0.25        # per leader target
 N_LEADERS = 3
 TRIM_WEIGHT = 0.28          # any position above this is cut back to target (cap is 30%)
 BAND = 0.03                 # re-trade a held target only when it is off by more than 3 points
-BETA_TARGET = 1.30          # beta-adjusted gross target in ATTACK (cap is 1.5; 0.20 of room for gaps)
+BETA_TARGET = 1.25          # beta-adjusted gross target in ATTACK (cap is 1.5; room for a 40% overnight sleeve gap)
 SLEEVE_MAX = 0.20
-GROSS_TRIM = 1.40           # if beta gross drifts above this, leveraged lines are reset to target
+GROSS_TRIM = 1.35           # if beta gross drifts above this, every line is reset to target
 VOL_LIMIT = 0.40            # QQQ 10-session realized vol, annualized
 BRAKE_DROP = -0.06          # QQQ 5-session return that triggers the brake
 BRAKE_MEMORY = 3            # brake stays on while any of the last 3 sessions shows the drop
@@ -37,6 +37,12 @@ CASH_BUFFER = 0.99          # spend at most 99% of available cash (open gaps, sl
 SINGLES = ("NVDA", "MSFT", "AAPL", "META", "AMZN", "GOOGL", "AVGO", "AMD", "MU", "MRVL",
            "NFLX", "TSLA", "PLTR", "ORCL", "CRM", "JPM", "V", "MA", "COST", "LLY")
 FALLBACK_ETFS = ("SMH", "QQQ", "XLK", "SPY")
+SEMIS = {"NVDA", "AVGO", "AMD", "MU", "MRVL", "SMH"}
+SEMIS_MAX = 3               # leaders allowed from the semiconductor group
+SEMIS_SLEEVE_SWITCH = 9     # if this many leaders are semis, the sleeve is TQQQ instead of SOXL
+SLEEVE_DAY_DROP = None      # if set: sleeve index (SMH for SOXL, QQQ for TQQQ) last-session return <= this -> no sleeve
+SLEEVE_VOL_LIMIT = None     # if set: sleeve index 10-session realized vol above this -> no sleeve
+SLEEVE_INDEX = {"SOXL": "SMH", "TQQQ": "QQQ", "QLD": "QQQ"}
 BETA_3X = {"TQQQ", "SOXL", "UPRO", "SPXL", "TNA", "FAS", "TECL", "LABU", "CURE", "DRN", "UDOW", "NAIL"}
 BETA_2X = {"QLD", "SSO", "DDM", "ROM", "UWM", "AGQ"}
 
@@ -117,8 +123,13 @@ def pick_leaders(closes: dict, n: int = N_LEADERS, held=()) -> list:
         ok = [t for t in pool if t in closes and in_uptrend(closes[t])]
         return sorted(ok, key=lambda t: (-momentum_score(closes[t]), t))
     order = ranked(SINGLES)
-    keep = [t for t in order[:KEEP_RANK] if t in held][:n]
-    picks = keep + [t for t in order if t not in keep][: n - len(keep)]
+    picks = []
+    for t in [t for t in order[:KEEP_RANK] if t in held] + order:
+        if len(picks) >= n:
+            break
+        if t in picks or (t in SEMIS and sum(p in SEMIS for p in picks) >= SEMIS_MAX):
+            continue
+        picks.append(t)
     for t in ranked(FALLBACK_ETFS):
         if len(picks) >= n:
             break
@@ -150,6 +161,13 @@ def target_weights(closes: dict, equity_ratio: float, held=()) -> dict:
     weights = {t: LEADER_WEIGHT for t in pick_leaders(closes, held=held)}
     if mode == ATTACK and equity_ratio > GOVERNOR:
         sleeve = pick_sleeve(closes)
+        if sleeve == "SOXL" and sum(t in SEMIS for t in weights) >= SEMIS_SLEEVE_SWITCH and "TQQQ" in closes:
+            sleeve = "TQQQ"
+        idx = closes.get(SLEEVE_INDEX.get(sleeve, ""), []) if sleeve else []
+        if sleeve and SLEEVE_DAY_DROP is not None and len(idx) > 1 and idx[-1] / idx[-2] - 1 <= SLEEVE_DAY_DROP:
+            sleeve = None
+        if sleeve and SLEEVE_VOL_LIMIT is not None and (realized_vol(idx, 10) or 9.9) > SLEEVE_VOL_LIMIT:
+            sleeve = None
         if sleeve and sleeve not in weights:
             used_beta = sum(w * beta(t) for t, w in weights.items())
             room = min(SLEEVE_MAX, (BETA_TARGET - used_beta) / beta(sleeve), 1.0 - sum(weights.values()) - 0.01)
@@ -169,13 +187,13 @@ def plan_orders(targets: dict, holdings: dict, prices: dict, cash: float) -> lis
         if q <= 0:
             continue
         p = prices.get(t)
-        if not p or p <= 0:
-            continue
         if t not in targets:
             sells.append({"ticker": t, "side": "sell", "quantity": q})
             continue
+        if not p or p <= 0:
+            continue
         w = q * p / equity
-        if w > TRIM_WEIGHT or abs(w - targets[t]) > BAND or (gross > GROSS_TRIM and beta(t) > 1):
+        if w > TRIM_WEIGHT or abs(w - targets[t]) > BAND or gross > GROSS_TRIM:
             delta = (targets[t] - w) * equity / p
             if delta < 0:
                 sells.append({"ticker": t, "side": "sell", "quantity": min(q, -delta)})
@@ -187,7 +205,7 @@ def plan_orders(targets: dict, holdings: dict, prices: dict, cash: float) -> lis
         p = prices.get(t)
         if p and p > 0:
             buys.append((t, targets[t] * equity / p, p))
-    spendable = (cash + sum(o["quantity"] * prices[o["ticker"]] for o in sells)) * CASH_BUFFER
+    spendable = (cash + sum(o["quantity"] * prices.get(o["ticker"], 0.0) for o in sells)) * CASH_BUFFER
     need = sum(q * p for _, q, p in buys)
     scale = min(1.0, spendable / need) if need > 0 else 0.0
     out = [dict(o, quantity=round(o["quantity"], 6)) for o in sells if o["quantity"] > 0]

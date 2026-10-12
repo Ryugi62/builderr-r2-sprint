@@ -131,6 +131,18 @@ def main():
     ours13 = rolling(m, fresh, "2022-03-01", "2026-10-09", n=13)
     qqq13 = rolling(m, lambda: buy_hold("QQQ"), "2022-03-01", "2026-10-09", n=13, enforce_limits=False)
     res["S6_rolling_13"] = {"agent": stats([w["ret"] for w in ours13]), "qqq_buy_hold": stats([w["ret"] for w in qqq13])}
+    second = bars_mv["vishwas"]
+    prize = []
+    for w, g in zip(ours, gate_ours):
+        q_ = qq[w["start"]]
+        moved = sorted([(1 + e["now"]) * (1 + e["beta"] * q_) - 1 for e in (first, second, third)], reverse=True)
+        rank = 1 + sum(w["ret"] <= b for b in moved)
+        prize.append((600, 250, 150, 0)[rank - 1] if g else 0)
+    res["expected_prize_usd_vs_current_top3"] = {"mean": sum(prize) / len(prize),
+                                                  "p_any_prize": sum(p > 0 for p in prize) / len(prize),
+                                                  "note": "current top 3 moved by beta; ignores other and late entrants"}
+    ours10 = rolling(m, fresh, "2022-03-01", "2026-10-09", n=10)
+    res["S6_rolling_10"] = {"agent": stats([w["ret"] for w in ours10])}
     res["moving_bar"] = {"entrants": bars_mv, "p_above_current_1st_moved": sum(beat1) / len(beat1),
                          "p_above_current_3rd_moved": sum(beat3) / len(beat3),
                          "note": "ignores other entrants and late entrants; a bar model, not a forecast"}

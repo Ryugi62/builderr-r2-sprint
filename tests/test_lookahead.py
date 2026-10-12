@@ -85,15 +85,19 @@ def test_agent_reads_only_bars_before_the_session(regimes):
         assert seen and max(seen) < d
 
 
-def test_no_hidden_state_from_a_later_call(regimes):
-    """Calling the same module on a later date first must not change an earlier date's orders."""
+def assert_no_hidden_state(make_decide, regimes):
+    """Calling one instance on a later date first must not change an earlier date's orders."""
     reg = regimes["calm_uptrend"]
     m = Market(reg["bars"])
     dates = [x for x in m.dates if reg["eval_start"] <= x <= reg["eval_end"]]
     ps = {"cash": 1e5, "positions": [], "last_prices": {}}
-    used = load_agent()
-    used.decide(m.before(dates[-1]), ps, 1e5)
-    assert used.decide(m.before(dates[3]), ps, 1e5) == load_agent().decide(m.before(dates[3]), ps, 1e5)
+    used = make_decide()
+    used(m.before(dates[-1]), ps, 1e5)
+    assert used(m.before(dates[3]), ps, 1e5) == make_decide()(m.before(dates[3]), ps, 1e5)
+
+
+def test_no_hidden_state_from_a_later_call(regimes):
+    assert_no_hidden_state(lambda: load_agent().decide, regimes)
 
 
 def test_agent_source_has_no_dates_or_clock():
@@ -108,21 +112,20 @@ def test_agent_source_has_no_dates_or_clock():
 
 
 def test_canary_cheater_is_caught_by_hidden_state_test(regimes):
-    """Mutation check: an agent that caches what it saw on a later date fails the hidden-state test."""
-    reg = regimes["calm_uptrend"]
-    m = Market(reg["bars"])
-    dates = [x for x in m.dates if reg["eval_start"] <= x <= reg["eval_end"]]
-    cache = {}
+    """Mutation check: the same checker fails on an agent that caches a later date's price."""
+    import pytest
 
-    def cheater(ms, ps, cash):
-        last = max(rows[-1]["ts"] for rows in ms.values())
-        cache.setdefault("future_close", ms["QQQ"][-1]["close"]) if last >= dates[-2] else None
-        f = cache.get("future_close")
-        if f and f > ms["QQQ"][-1]["close"]:
-            return [{"ticker": "QQQ", "side": "buy", "quantity": 1.0}]
-        return []
+    def make_cheater():
+        cache = {}
 
-    ps = {"cash": 1e5, "positions": [], "last_prices": {}}
-    clean = cheater(m.before(dates[3]), ps, 1e5)
-    cheater(m.before(dates[-1]), ps, 1e5)
-    assert cheater(m.before(dates[3]), ps, 1e5) != clean  # the test pattern would flag this agent
+        def cheater(ms, ps, cash):
+            q = ms["QQQ"]
+            if "seen" not in cache:
+                cache["seen"] = q[-1]["close"]
+            elif cache["seen"] > q[-1]["close"]:
+                return [{"ticker": "QQQ", "side": "buy", "quantity": 1.0}]
+            return []
+        return cheater
+
+    with pytest.raises(AssertionError):
+        assert_no_hidden_state(make_cheater, regimes)

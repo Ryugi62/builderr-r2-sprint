@@ -11,7 +11,7 @@ In plain words: most 15-session windows end near flat (median 0.0%); about 1 in 
 | Beat the current #3 / #1, each moved by its own fitted beta to QQQ | 25.5% / 10.2% | — | — |
 | Beat the prize bar: the Round 1 winner's Round 2 return, −2.99% on 10-09, moved by its beta 0.45 | 77.7% | — | **89.5%** |
 
-The trade-off is plain: about 2 times QQQ's chance of a top-3-sized return overall and 4 times from ATTACK, for a lower chance of clearing the prize bar (77.7% vs 89.5%; 71.9% vs 82.2% from ATTACK at the fixed −2.99%). With 13 sessions instead of 15: P(>= +6%) 24.3% vs QQQ 11.5%. `agent.py` is one standard-library file (`import math` only): no network, files, clock, randomness or LLM. Scored file: `agent.py` sha256 `e3169fbf30cfbb47d7662caf2847a8963b4ded8660010815cc78629fc313537a`, git tag `r2-submit`.
+The trade-off is plain: about 2 times QQQ's chance of a top-3-sized return overall and 4 times from ATTACK, for a lower chance of clearing the prize bar (77.7% vs 89.5%; 71.9% vs 82.2% from ATTACK at the fixed −2.99%). With 13 sessions instead of 15: P(>= +6%) 24.3% vs QQQ 11.5%; with 10 (if loading is delayed): 19.2%. Against the current top 3 moved by their betas, the average prize over past windows is $90 (P(any prize) 27.4%; other and late entrants ignored). `agent.py` is one standard-library file (`import math` only): no network, files, clock, randomness or LLM. Scored file: `agent.py` sha256 `429c170c057c2cf1ff6a67e4a00da520a30e7d63c7c3e5e053f2145df196e5ed`, git tag `r2-submit`.
 
 ## When is it aggressive, and what forces it to stop?
 
@@ -54,7 +54,7 @@ All numbers are backtests on daily Yahoo bars (split/dividend adjusted, as the b
 |---|---|---|
 | This agent (backtest) | +3.34% | 7.9% |
 | Round 1 winner (official) | −2.99% | — |
-| QQQ (official market line; the board's QQQ bot row, whole shares, shows +5.19%) | +5.32% | — |
+| QQQ (official market line in `data/official_round2_history_2026-10-09.json`; the board's QQQ bot row in the template's `leaderboard.json`, whole shares, shows +5.19%) | +5.32% | — |
 
 QQQ alone did better here: the agent was in cash for 25 of the 68 sessions (13 in a row from Jul 20).
 
@@ -95,6 +95,8 @@ python research/chart.py            # writes docs/round2_window.svg
 - The admission windows carry ~220 bars of warm-up (template README); with fewer than 53 sessions of QQQ history the agent stays in cash.
 - Price data is not committed (Yahoo terms); `research/fetch_bars.py` re-downloads it and `results/backtest.json` records the sha256 of the file used. Adjusted prices can shift slightly when re-downloaded.
 - High variance on purpose: about 10% of past windows lost more than 6.2%; the worst lost 22.6%.
+- Why fixed 25% lines and not volatility sizing: the template brief recommends sizing by volatility for a calm, long-horizon bot; this entry is built for a 13–15 session raw-return ranking. A sleeve volatility gate was tested and lowered P(>= +6%) by 1.9 points (`results/variants.jsonl`).
+- Fresh-window re-runs: the template README says top finishers are re-run on unseen windows. Expect this bot to look like its by-year table there — strong in uptrends (30–37% of windows >= +6%), mostly in cash in falling markets (2022: 3.8%), non-overlapping blocks P(>= +6%) 31.2% ± 5.3%.
 - Stops are regime-level (QQQ), not per stock: one bad semis day can cost 15% before the next decision.
 - Caps are checked at daily closes; intraday leverage is not measured (the board is daily).
 - Two churn rules were added after the first run and the beta target was lowered twice (`SPEC.md` change log).

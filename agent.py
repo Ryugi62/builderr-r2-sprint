@@ -1,12 +1,12 @@
 """Convex Sprint — Builderr Trading Round 2 agent.
 
-When is it aggressive?  QQQ is above its 20- and 50-session averages, its 10-session realized
+When is it aggressive?  QQQ is above its 20- and 50-session averages (on 2 of the last 3 closes), its 10-session realized
 volatility is <= 40% a year, and it has not fallen 6% in 5 sessions recently. Then it holds the
 3 strongest uptrending stocks at 25% each plus one 3x ETF sleeve (SOXL when semis lead, else
 TQQQ) sized so beta-adjusted gross is 1.25.
 
-What forces it to stop?  (1) QQQ closes under its 20-session average or volatility passes 40%:
-the 3x sleeve is sold, leaders stay. (2) QQQ closes under its 50-session average, or a -6%
+What forces it to stop?  (1) QQQ is not above its 20-session average (2 of 3 closes) or volatility passes 40%:
+the 3x sleeve is sold, leaders stay. (2) QQQ is not above its 50-session average (2 of 3 closes), or a -6%
 five-session drop in any of the last 3 sessions: everything goes to cash. (3) The account
 falls to 90% of its $100,000 start: the sleeve is not allowed again until it recovers.
 

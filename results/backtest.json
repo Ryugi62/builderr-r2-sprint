@@ -171,6 +171,24 @@
    "best": 0.14927739211726498
   }
  },
+ "expected_prize_usd_vs_current_top3": {
+  "mean": 89.81643356643356,
+  "p_any_prize": 0.2736013986013986,
+  "note": "current top 3 moved by beta; ignores other and late entrants"
+ },
+ "S6_rolling_10": {
+  "agent": {
+   "n": 1149,
+   "p_ge_6pct": 0.19234116623150566,
+   "p_ge_8_5pct": 0.11836379460400348,
+   "p_gt_arnav_gate": 0.8111401218450827,
+   "median": 0.0,
+   "p10": -0.05329653734346651,
+   "p90": 0.09252032341300676,
+   "worst": -0.2343167606783827,
+   "best": 0.5344635686291153
+  }
+ },
  "moving_bar": {
   "entrants": {
    "opu": {

@@ -11,7 +11,7 @@ In plain words: most 15-session windows end near flat (median 0.0%); about 1 in 
 | Beat the current #3 / #1, each moved by its own fitted beta to QQQ | 25.5% / 10.2% | — | — |
 | Beat the prize bar: the Round 1 winner's Round 2 return, −2.99% on 10-09, moved by its beta 0.45 | 77.7% | — | **89.5%** |
 
-The trade-off is plain: about 2 times QQQ's chance of a top-3-sized return overall and 4 times from ATTACK, for a lower chance of clearing the prize bar (77.7% vs 89.5%; 71.9% vs 82.2% from ATTACK at the fixed −2.99%). With 13 sessions instead of 15: P(>= +6%) 24.3% vs QQQ 11.5%. `agent.py` is one standard-library file (`import math` only): no network, files, clock, randomness or LLM.
+The trade-off is plain: about 2 times QQQ's chance of a top-3-sized return overall and 4 times from ATTACK, for a lower chance of clearing the prize bar (77.7% vs 89.5%; 71.9% vs 82.2% from ATTACK at the fixed −2.99%). With 13 sessions instead of 15: P(>= +6%) 24.3% vs QQQ 11.5%. `agent.py` is one standard-library file (`import math` only): no network, files, clock, randomness or LLM. Scored file: `agent.py` sha256 `e3169fbf30cfbb47d7662caf2847a8963b4ded8660010815cc78629fc313537a`, git tag `r2-submit`.
 
 ## When is it aggressive, and what forces it to stop?
 

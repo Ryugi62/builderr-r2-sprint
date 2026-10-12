@@ -37,12 +37,6 @@ CASH_BUFFER = 0.99          # spend at most 99% of available cash (open gaps, sl
 SINGLES = ("NVDA", "MSFT", "AAPL", "META", "AMZN", "GOOGL", "AVGO", "AMD", "MU", "MRVL",
            "NFLX", "TSLA", "PLTR", "ORCL", "CRM", "JPM", "V", "MA", "COST", "LLY")
 FALLBACK_ETFS = ("SMH", "QQQ", "XLK", "SPY")
-SEMIS = {"NVDA", "AVGO", "AMD", "MU", "MRVL", "SMH"}
-SEMIS_MAX = 3               # leaders allowed from the semiconductor group
-SEMIS_SLEEVE_SWITCH = 9     # if this many leaders are semis, the sleeve is TQQQ instead of SOXL
-SLEEVE_DAY_DROP = None      # if set: sleeve index (SMH for SOXL, QQQ for TQQQ) last-session return <= this -> no sleeve
-SLEEVE_VOL_LIMIT = None     # if set: sleeve index 10-session realized vol above this -> no sleeve
-SLEEVE_INDEX = {"SOXL": "SMH", "TQQQ": "QQQ", "QLD": "QQQ"}
 BETA_3X = {"TQQQ", "SOXL", "UPRO", "SPXL", "TNA", "FAS", "TECL", "LABU", "CURE", "DRN", "UDOW", "NAIL"}
 BETA_2X = {"QLD", "SSO", "DDM", "ROM", "UWM", "AGQ"}
 
@@ -127,7 +121,7 @@ def pick_leaders(closes: dict, n: int = N_LEADERS, held=()) -> list:
     for t in [t for t in order[:KEEP_RANK] if t in held] + order:
         if len(picks) >= n:
             break
-        if t in picks or (t in SEMIS and sum(p in SEMIS for p in picks) >= SEMIS_MAX):
+        if t in picks:
             continue
         picks.append(t)
     for t in ranked(FALLBACK_ETFS):
@@ -161,13 +155,6 @@ def target_weights(closes: dict, equity_ratio: float, held=()) -> dict:
     weights = {t: LEADER_WEIGHT for t in pick_leaders(closes, held=held)}
     if mode == ATTACK and equity_ratio > GOVERNOR:
         sleeve = pick_sleeve(closes)
-        if sleeve == "SOXL" and sum(t in SEMIS for t in weights) >= SEMIS_SLEEVE_SWITCH and "TQQQ" in closes:
-            sleeve = "TQQQ"
-        idx = closes.get(SLEEVE_INDEX.get(sleeve, ""), []) if sleeve else []
-        if sleeve and SLEEVE_DAY_DROP is not None and len(idx) > 1 and idx[-1] / idx[-2] - 1 <= SLEEVE_DAY_DROP:
-            sleeve = None
-        if sleeve and SLEEVE_VOL_LIMIT is not None and (realized_vol(idx, 10) or 9.9) > SLEEVE_VOL_LIMIT:
-            sleeve = None
         if sleeve and sleeve not in weights:
             used_beta = sum(w * beta(t) for t, w in weights.items())
             room = min(SLEEVE_MAX, (BETA_TARGET - used_beta) / beta(sleeve), 1.0 - sum(weights.values()) - 0.01)
@@ -219,18 +206,26 @@ def plan_orders(targets: dict, holdings: dict, prices: dict, cash: float) -> lis
 # ================================================================== APPLICATION
 def decide(market_state, portfolio_state, cash):
     closes = {}
-    for t, bars in (market_state or {}).items():
-        try:
-            xs = [float(b["close"]) for b in bars[-80:]]
-        except (KeyError, TypeError, ValueError):
-            continue
-        if xs and all(x > 0 and math.isfinite(x) for x in xs):
+    for t, bars in (market_state if isinstance(market_state, dict) else {}).items():
+        xs = []
+        for b in bars[-80:] if isinstance(bars, list) else []:
+            try:
+                x = float(b["close"])
+            except (KeyError, TypeError, ValueError):
+                continue  # skip one bad bar, keep the ticker
+            if x > 0 and math.isfinite(x):
+                xs.append(x)
+        if xs:
             closes[t] = xs
     if not closes.get("QQQ") and not closes.get("SPY"):
         return []
-    portfolio_state = portfolio_state or {}
-    cash = float(portfolio_state.get("cash", cash) or 0.0)
+    portfolio_state = portfolio_state if isinstance(portfolio_state, dict) else {}
+    try:
+        cash = float(portfolio_state.get("cash", cash) or 0.0)
+    except (TypeError, ValueError):
+        cash = 0.0
     last = portfolio_state.get("last_prices") or {}
+    last = last if isinstance(last, dict) else {}
     prices = {t: xs[-1] for t, xs in closes.items()}
     for t, p in last.items():
         try:
@@ -242,7 +237,7 @@ def decide(market_state, portfolio_state, cash):
     for p in portfolio_state.get("positions") or []:
         try:
             q = float(p.get("quantity") or 0)
-        except (TypeError, ValueError):
+        except (AttributeError, TypeError, ValueError):
             continue
         if q > 0:
             holdings[str(p.get("ticker"))] = holdings.get(str(p.get("ticker")), 0.0) + q

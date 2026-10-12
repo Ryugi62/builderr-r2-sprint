@@ -4,14 +4,14 @@
 
 In plain words: most 15-session windows end near flat (median 0.0%); about 1 in 4 clear the current #3 bar; about 1 in 10 end 6% or more down.
 
-| Past 15-session windows, 2022-03 .. 2026-10 (simulation) | This agent | QQQ buy and hold |
-|---|---|---|
-| Beat the current #3 (sham +5.76%, moved with its own beta 0.24 to QQQ) | **25.5%** | — |
-| Beat the current #1 (opu +8.54%, moved with its own beta 0.89 to QQQ) | **10.2%** | — |
-| Return >= +6% / >= +8.5% | 28.0% / 17.4% | 13.8% / 6.5% |
-| Return > −2.99% (Round 1 winner's Round 2 return = the prize bar) | 77.0% | **80.7%** |
+| Past 15-session windows, 2022-03 .. 2026-10 (simulation) | This agent | This agent without PLTR, MU, MRVL, AVGO | QQQ buy and hold |
+|---|---|---|---|
+| Return >= +6% (about the current #3) / >= +8.5% (about the current #1) | 28.0% / 17.4% | 22.6% / 14.6% | 13.8% / 6.5% |
+| Windows that **started in ATTACK** (the state on 2026-10-09): >= +6% | **35.7%** | — | 8.8% |
+| Beat the current #3 / #1, each moved by its own fitted beta to QQQ | 25.5% / 10.2% | — | — |
+| Beat the prize bar: the Round 1 winner's Round 2 return, −2.99% on 10-09, moved by its beta 0.45 | 77.7% | — | **89.5%** |
 
-So it trades a slightly lower chance of clearing the prize bar for about twice QQQ's chance of a top-3-sized return. `agent.py` is one standard-library file (`import math` only): no network, files, clock, randomness or LLM.
+The trade-off is plain: about 2 times QQQ's chance of a top-3-sized return overall and 4 times from ATTACK, for a lower chance of clearing the prize bar (77.7% vs 89.5%; 71.9% vs 82.2% from ATTACK at the fixed −2.99%). With 13 sessions instead of 15: P(>= +6%) 24.3% vs QQQ 11.5%. `agent.py` is one standard-library file (`import math` only): no network, files, clock, randomness or LLM.
 
 ## When is it aggressive, and what forces it to stop?
 
@@ -43,7 +43,6 @@ All numbers are backtests on daily Yahoo bars (split/dividend adjusted, as the b
 **How much to trust the window odds**
 - The 1,144 windows overlap. Non-overlapping blocks (77): P(>= +6%) 31.2% ± 5.3% (one standard error).
 - By start year, P(>= +6%): 2022 3.8% · 2023 30.0% · 2024 36.5% · 2025 33.6% · 2026 33.9%. In a falling market the bot sits in cash and rarely reaches the bar.
-- Starting in ATTACK (the state on 2026-10-09), past windows cleared +6% 35.7% of the time and −2.99% 71.9%.
 - The stock list is the board's 2026 fetch list, which includes later leaders. Without PLTR, MU, MRVL and AVGO: P(>= +6%) 22.6%, P(>= +8.5%) 14.6%.
 - "Moved bar" = the entrant's 2026-10-09 return grown by its fitted beta times QQQ's return in the same window; other and late entrants are ignored. A bar model, not a forecast.
 
@@ -55,17 +54,17 @@ All numbers are backtests on daily Yahoo bars (split/dividend adjusted, as the b
 |---|---|---|
 | This agent (backtest) | +3.34% | 7.9% |
 | Round 1 winner (official) | −2.99% | — |
-| QQQ buy and hold (official) | +5.32% | — |
+| QQQ (official market line; the board's QQQ bot row, whole shares, shows +5.19%) | +5.32% | — |
 
 QQQ alone did better here: the agent was in cash for 25 of the 68 sessions (13 in a row from Jul 20).
 
-**Round 1 window** (16 sessions closing 2026-07-02, where the Round 1 winner made +5.91%): this agent **−6.16%** (QQQ +1.6%). Semis fell 9% on 2026-06-05 and the book lost about 15% that day.
+**Round 1 window** (16 sessions closing 2026-07-02, where the Round 1 winner made +5.91%): this agent **−6.16%** (QQQ +1.6%). It switched between ATTACK and LEADERS in a choppy semis tape; its worst days were Jun 16 (−5.3%), Jun 23 (−7.2%) and Jul 1 (−5.8%). (The worst single day of the 2022–2026 replay, −15.5%, was 2026-06-05, when SMH fell 9%.)
 
 **One account, 2022-03 .. 2026-10** (1,158 sessions, in-sample universe): +438%, 44% a year, max drawdown 25.8%, worst day −15.5%.
 
 **Admission:** the template's own `preview.py` (copied unchanged, MIT) passes — peak gross 1.32x, longest run >= 30% 0 days, worst drawdown 12.7% (`results/preview_template_run.txt`). The same checks in `engine/sim.py::run_admission` pass on two extra stress windows (2022-03..06, 2025-02..05) and on one continuous 2022–2026 run (peak close gross 1.37; one close at 30.3%, limit is 5 in a row). A synthetic +40% overnight gap in the sleeve stays under 1.45 (`tests/test_caps.py`).
 
-**Sensitivity** (vol limit, brake, leader weight, beta target 1.04–1.40, confirmation 2–4 closes, keep-rank 5–7): P(>= +6%) stays between 24.0% and 29.0%. Reviewer ideas that were tested and not adopted (semis cap, SOXL→TQQQ switch, 97% floor, one-day sleeve exit, sleeve vol gate, 30% vol limit) are in `results/variants.jsonl`; none raised both P(>= +6%) and P(> −2.99%).
+**Sensitivity** (vol limit, brake, leader weight, beta target 1.04–1.40, confirmation 2–4 closes, keep-rank 5–7): P(>= +6%) stays between 24.0% and 29.0%. Reviewer ideas were tested with `research/agent_research.py` (the same agent with switchable variants, all off = identical trades, checked by a test) and are in `results/variants.jsonl`: semis cap, semis cap + TQQQ switch, 97% floor, one-day sleeve exit, sleeve vol gate, 30% vol limit, SMH brake for SOXL, QLD in LEADERS. None moved P(>= +6%) and P(> −2.99%) up together by more than 0.6 points (well inside the ±5-point noise), so the scored file stays simpler.
 
 ## Pre-submit checklist (from the challenge page)
 
@@ -74,13 +73,13 @@ QQQ alone did better here: the agent was in cash for 25 of the 68 sessions (13 i
 | No `.env` and no API keys committed | `.gitignore`; the agent needs no key |
 | `python preview.py` clears the safety bar | `results/preview_template_run.txt` (template preview, unchanged) |
 | Every position under the 30% cap; gross under 1.5x | targets 25% / 1.25; `tests/test_caps.py`; replays above |
-| No external data for the regime dates (lookahead) | agent imports only `math`; `tests/test_lookahead.py`: future bars scrambled, a recording proxy shows every bar read is before the session, no date literals or clock names, no state carried from a later call |
+| No external data for the regime dates (lookahead) | agent imports only `math`; `tests/test_lookahead.py`: future bars scrambled; a recording proxy confirms every bar it reads predates the session; no date literals or clock names in the source; no state carried from a later call (a canary agent that caches a later date is caught by that test) |
 | Runs with only the bars it is given | `tests/test_contract.py` (missing tickers, bad bars, file copied alone the way `private_agents/` loads it) |
 
 ## Run it
 
 ```bash
-python -m pytest -q                 # 31 tests: contract, caps, lookahead, regime
+python -m pytest -q                 # 34 tests: contract, caps, lookahead, regime
 python preview.py                   # the template's admission preview
 python research/fetch_bars.py       # daily bars for the board's 42 tickers (not committed; sha256 in results)
 python research/backtest.py         # writes results/backtest.json
@@ -93,6 +92,8 @@ python research/chart.py            # writes docs/round2_window.svg
 ## Limits
 
 - Backtests are simulations on past data; nothing here predicts Oct 2026.
+- The admission windows carry ~220 bars of warm-up (template README); with fewer than 53 sessions of QQQ history the agent stays in cash.
+- Price data is not committed (Yahoo terms); `research/fetch_bars.py` re-downloads it and `results/backtest.json` records the sha256 of the file used. Adjusted prices can shift slightly when re-downloaded.
 - High variance on purpose: about 10% of past windows lost more than 6.2%; the worst lost 22.6%.
 - Stops are regime-level (QQQ), not per stock: one bad semis day can cost 15% before the next decision.
 - Caps are checked at daily closes; intraday leverage is not measured (the board is daily).

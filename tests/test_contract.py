@@ -78,3 +78,29 @@ def test_agent_runs_when_copied_alone_like_host_private_agents(tmp_path, regimes
     reg = regimes["calm_uptrend"]
     r = run_live(decide, Market(reg["bars"]), reg["eval_start"], reg["eval_end"])
     assert r["trades"] > 0
+
+
+def test_research_copy_with_defaults_matches_agent(regimes):
+    """research/agent_research.py (rule variants, all off) must trade exactly like agent.py."""
+    import importlib.util
+
+    from engine.sim import Market, run_live
+    from conftest import load_agent
+
+    spec = importlib.util.spec_from_file_location("agent_research", ROOT / "research" / "agent_research.py")
+    research = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(research)
+    for reg in regimes.values():
+        m = Market(reg["bars"])
+        a = run_live(load_agent().decide, m, reg["eval_start"], reg["eval_end"])
+        b = run_live(research.decide, m, reg["eval_start"], reg["eval_end"])
+        assert a["curve"] == b["curve"]
+
+
+def test_malformed_portfolio_and_one_bad_bar(agent, bull_market):
+    bad = dict(bull_market)
+    bad["QQQ"] = bull_market["QQQ"][:-5] + [{"ts": "x"}] + bull_market["QQQ"][-5:]
+    ps = {"cash": "1e5", "positions": ["not-a-dict", {"ticker": "MU", "quantity": 1.0}], "last_prices": None}
+    orders = agent.decide(bad, ps, 1e5)
+    _valid(orders)
+    assert orders  # QQQ kept despite one bad bar -> still trades

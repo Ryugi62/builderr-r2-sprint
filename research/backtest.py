@@ -105,7 +105,7 @@ def main():
     mk = json.load(open(HISTORY))["market"]["curve"]
     qret = [mk[i] / mk[i - 1] - 1 for i in range(1, len(mk))]
     bars_mv = {}
-    for name in ("opu", "vishwas", "sham"):
+    for name in ("opu", "vishwas", "sham", "arnav"):
         c = off0[name]["curve"]
         n = len(c)
         rr_ = [c[i] / c[i - 1] - 1 for i in range(len(c) - n + 1, n)]
@@ -117,6 +117,20 @@ def main():
     first, third = bars_mv["opu"], bars_mv["sham"]
     beat1 = [w["ret"] > (1 + first["now"]) * (1 + first["beta"] * qq[w["start"]]) - 1 for w in ours]
     beat3 = [w["ret"] > (1 + third["now"]) * (1 + third["beta"] * qq[w["start"]]) - 1 for w in ours]
+    ar = bars_mv["arnav"]
+    gate_ours = [w["ret"] > (1 + ar["now"]) * (1 + ar["beta"] * qq[w["start"]]) - 1 for w in ours]
+    gate_qqq = [qq[w["start"]] > (1 + ar["now"]) * (1 + ar["beta"] * qq[w["start"]]) - 1 for w in ours]
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("agent_regime", ROOT / "agent.py"); _A = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_A)
+    att = [_A.regime([b["close"] for b in m.before(w["start"], 80)["QQQ"]]) == _A.ATTACK for w in ours]
+    res["attack_start"] = {"n": sum(att),
+                           "agent": stats([w["ret"] for w, a in zip(ours, att) if a]),
+                           "qqq_buy_hold": stats([qq[w["start"]] for w, a in zip(ours, att) if a])}
+    res["moving_prize_bar"] = {"arnav_beta": ar["beta"], "p_agent_above": sum(gate_ours) / len(gate_ours),
+                               "p_qqq_above": sum(gate_qqq) / len(gate_qqq)}
+    ours13 = rolling(m, fresh, "2022-03-01", "2026-10-09", n=13)
+    qqq13 = rolling(m, lambda: buy_hold("QQQ"), "2022-03-01", "2026-10-09", n=13, enforce_limits=False)
+    res["S6_rolling_13"] = {"agent": stats([w["ret"] for w in ours13]), "qqq_buy_hold": stats([w["ret"] for w in qqq13])}
     res["moving_bar"] = {"entrants": bars_mv, "p_above_current_1st_moved": sum(beat1) / len(beat1),
                          "p_above_current_3rd_moved": sum(beat3) / len(beat3),
                          "note": "ignores other entrants and late entrants; a bar model, not a forecast"}

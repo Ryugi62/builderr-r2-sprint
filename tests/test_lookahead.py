@@ -105,3 +105,24 @@ def test_agent_source_has_no_dates_or_clock():
     assert not [s for s in strings if re.search(r"(19|20)\d\d-\d\d", s)]
     names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)} | {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
     assert not names & {"time", "datetime", "now", "today", "random", "environ"}
+
+
+def test_canary_cheater_is_caught_by_hidden_state_test(regimes):
+    """Mutation check: an agent that caches what it saw on a later date fails the hidden-state test."""
+    reg = regimes["calm_uptrend"]
+    m = Market(reg["bars"])
+    dates = [x for x in m.dates if reg["eval_start"] <= x <= reg["eval_end"]]
+    cache = {}
+
+    def cheater(ms, ps, cash):
+        last = max(rows[-1]["ts"] for rows in ms.values())
+        cache.setdefault("future_close", ms["QQQ"][-1]["close"]) if last >= dates[-2] else None
+        f = cache.get("future_close")
+        if f and f > ms["QQQ"][-1]["close"]:
+            return [{"ticker": "QQQ", "side": "buy", "quantity": 1.0}]
+        return []
+
+    ps = {"cash": 1e5, "positions": [], "last_prices": {}}
+    clean = cheater(m.before(dates[3]), ps, 1e5)
+    cheater(m.before(dates[-1]), ps, 1e5)
+    assert cheater(m.before(dates[3]), ps, 1e5) != clean  # the test pattern would flag this agent

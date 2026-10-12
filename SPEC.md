@@ -53,7 +53,7 @@ has explicit, numeric rules for when it must stop being aggressive.
 ## Non-goals
 - No ML model training, no LLM, no network, no external data.
 - No intraday logic (the engine is daily).
-- Not a fit to any single window. Parameters are round numbers set before the first backtest; the two churn rules added after v0 were added after seeing the Round 2 window (see change log), so the Round 2 number in S7 is in-sample and is reported as such.
+- Not a fit to any single window. Parameters started as round numbers set before the first backtest; the beta target was later lowered twice for cap room, and the two churn rules added after v0 were added after seeing the Round 2 window (see change log), so the Round 2 number in S7 is in-sample and is reported as such.
 - Not a recommendation to trade real money.
 
 ## Architecture note
@@ -86,3 +86,7 @@ tests are separate packages that import the agent; the agent imports nothing fro
   leaders; TQQQ instead of SOXL when 2+ leaders are semis; sleeve off below 97% of start; sleeve off after a
   -3%/-4% sleeve-index day; sleeve off when SMH 10-session vol > 35%; QQQ vol limit 30%. None raised both
   P(return >= +6%) and P(return > -2.99%); all lowered the first by 0.2-1.9 points.
+- v3 -> v4 (second review): rule-variant switches moved out of the scored file into `research/agent_research.py`
+  (defaults trade identically — tested); one bad bar is skipped instead of dropping the ticker; malformed portfolio
+  entries are ignored. Trading behaviour unchanged (same backtest numbers). Two more variants tested and not adopted:
+  SMH brake for SOXL (+0.3 pt prize-bar odds, 0 pt top-3 odds) and QLD in LEADERS (+0.2/+0.3 pt) — inside the noise.
